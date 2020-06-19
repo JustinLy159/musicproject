@@ -1,0 +1,244 @@
+---
+title: Predicting a Hit Song Using Machine Learning
+author: "Justin Ly 4269684"
+date: "06/04/20"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+
+This research project is a utilization of machine learning to delve into the constructs of popular music. Through recent history, a common criticism of mainstream  music has been that all pop music sounds the same. Obviously they don't sound exactly the same to the average ear, but we may be able identify common trends among popular songs in areas such as acousticness, speed, or tonality of the songs. In response to this, our purpose in this project was to determine if we could develop a classifier that could accurately predict whether or not a song will have mainstream success based on various audio features.
+
+All analyses performed in this project were done using the R software for statistical computing and graphics. In this supervised machine learning project, we implemented three different methods in developing our classfiier. We used logistic regression and classification trees to develop a basic classifier, and used an ensemble method by creating a random forest decision trees algorithm. To form our conclusions, the results of these classifiers were compared and analyzed to choose a final model for our classifier.
+
+# Data Overview: 
+
+The dataset used is titled 'The Spotify Hit Predictor Dataset (1960-2019)' put together by Farooq Ansari and is taken from the website Kaggle: https://www.kaggle.com/theoverman/the-spotify-hit-predictor-dataset#dataset-of-10s.csv. The collection of data has 6 datasets, one for each decade from the 1960s to the 2010s, and each dataset has over 6000 song entries, with 19 features. The data was taken and compiled from Spotify's "Audio Features" website, where you can download audio features for any song on the platform. For this project we perform our analysis on the dataset from the 2010s, which contains 6398 songs. 
+
+The response variable from the data was created by the author is the binary variable 'target', which is a 0 if the song was not a hit, and a 1 if the song was a hit. The '0' designation is given to the song if the track or track artist didn't appear in the 'hit' list of the decade given by Billboard. A song is also given a 0 if it belongs to an avant-garde/non-mainstream genre. Otherwise, the song is designated a '1.'
+
+The predictor variables used for model building are: danceability, energy, loudness, speechiness, acousticness, valence, tempo, and duration. All of these variables used are numeric based on predefined scales.
+
+From the Kaggle data description:
+
+danceability: Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+energy: Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+
+loudness: The overall loudness of a track in decibels (dB).
+
+speechiness: Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value.
+
+acousticness: A confidence measure from 0.0 to 1.0 of whether the track is acoustic
+
+tempo: The overall estimated tempo of a track in beats per minute (BPM)
+
+duration_ms:  The duration of the track in milliseconds
+
+valence: A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track
+
+# Methods:
+
+## Data Processing
+
+The data set comes with 19 features, many of which we deem unneccessary and irrelevant. We cut down the list to 8 features after removing variables such as song title, artist, time signature, and key. Although there would be common trends in some of the variables cut, the variance of the data in these features wouldn't provide interesting results. 
+
+Furthermore we found using is.na() that there are no missing values in the data, so there were no issues in the completeness of the dataset. 
+
+
+We then split the data into training and test sets, with 30% of the entries being put aside into the test set, and the rest being used for training.
+
+The number of observations in the training set ends up being 4479, with 1919 observations in the test set.
+
+A sample of the data is shown below.
+
+```{r setup, include=TRUE, message=FALSE,echo=FALSE}
+library(tidyverse)
+library(ROCR)
+music <- read.csv("/Users/justin159ly/Downloads/dataset-of-10s.csv")
+
+
+music = as_tibble(music)
+
+
+
+## Dimensions: [6398x19]
+
+
+attach(music)
+
+music = subset(music, select = -c(track,artist,uri,key,mode,time_signature,chorus_hit,sections,liveness,instrumentalness))
+head(music)
+## Dimensions: [6398x9]
+set.seed(100)
+train = sample(1:nrow(music), 4479)
+data.train = music[train,]
+data.test = music[-train,]
+y.test <- data.test$target
+## Dimensions of training set: [4479x9] of test set:[1919x9]
+
+```
+
+## Classifiers
+
+We used three methods to develop our classifier. We used two basic classifier methods: logisitic regression and decision trees, and random forests as our ensemble method. Model selection is performed in the next section, and involved misclassification rates and ROC curves to assess overall performances of our models.
+
+# Model Building
+
+
+We used three methods to develop our classifier, two basic classifier methods and an ensemble method.
+
+We fit a logistic regression model to our data using 'target' as the response variable. Our initial findings told us that all of the variables that we fit were significant except for valence. We find our test error through the confusion matrix and intend to further analyze by developing the classifier to predict results.
+
+Logistic Regression Test Error: .2319
+
+In using decision trees we pruned the tree and then pruned again using cross-validation and found that the best fit was using a tree of size 8. From their we computed the test error using a misclassfication table. 
+
+Decision Trees Test Error:.2506
+
+In the random forest portion we were able to distinguish the most important variables in terms of Model Accuracy, which were loudness, energy, and acousticness.
+
+Random Forest Test Error: .1819
+
+Planned future steps:
+
+
+## Logistic Regression
+```{r setup2, include=TRUE, message=FALSE, echo=TRUE}
+
+
+
+glm.fit = glm(target ~ .,
+data=music, family=binomial)
+summary(glm.fit)
+
+# everything except valence is significant
+
+trainingprob = predict(glm.fit, type="response")
+
+music = music %>%
+mutate(predHIT=as.factor(ifelse(trainingprob<=0.5, "0", "1")))
+# Confusion matrix 
+log.err = table(pred=music$predHIT, true=music$target)
+test.err = 1 - sum(diag(log.err))/sum(log.err)
+test.err
+
+#ROC
+pred = prediction(trainingprob, music$target)
+perf = performance(pred,measure="tpr",x.measure="fpr")
+
+plot(perf,col=2,lwd=3,main = "ROC Curve for Logisitic Regression")
+abline(0,1)
+
+#AUC
+
+auc = performance(pred, "auc")@y.values
+auc
+
+```
+
+## Classification Trees
+```{r setup3, include=TRUE, message=FALSE, echo=FALSE}
+#Classification Trees
+library(tree)
+tree <- tree(as.factor(target) ~., data = data.train)
+plot(tree)
+text(tree, pretty = 0, cex = .7)
+title("Classification Tree Built on Training Set")
+
+yhat.testset <- predict(tree, data.test, type='class')
+
+error <- table(yhat.testset, y.test)
+error
+
+# Test Accuracy Rate
+sum(diag(error))/sum(error)
+
+# Test error rate (Classification Error)
+1-sum(diag(error))/sum(error)
+
+prune <- prune.tree(tree, k = 0:20, method = "misclass")
+# Best size
+best.prune <- prune$size[which.min(prune$dev)]
+best.prune
+
+cv <- cv.tree(tree, FUN=prune.misclass, K=10)
+# Print out cv
+cv
+
+best.cv <- cv$size[which.min(cv$dev)]
+best.cv
+
+# Prune tree
+tree.prune <- prune.misclass (tree, best=best.prune)
+# Plot pruned tree
+plot(tree.prune)
+text(tree.prune, pretty=0, col = "red", cex = .8)
+title("Pruned tree of size 6")
+
+# Prune tree based on cv
+tree.cv <- prune.misclass (tree, best=best.cv)
+# Plot pruned tree
+plot(tree.cv)
+text(tree.cv, pretty=0, col = "blue", cex = .8)
+title("Pruned tree of size 8")
+
+pred.prune <- predict(tree.prune, data.test, type='class')
+error <- table(pred.prune, y.test)
+error
+# Test Accuracy Rate
+sum(diag(error))/sum(error)
+# Test error rate (Classification Error)
+1-sum(diag(error))/sum(error)
+
+cv.pred <- predict(tree.cv, data.test, type='class')
+error <- table(cv.pred, y.test)
+error
+# Test Accuracy Rate
+sum(diag(error))/sum(error)
+# Test error rate (Classification Error)
+1-sum(diag(error))/sum(error)
+
+
+```
+
+## Random Forests
+```{r setup4, include=TRUE, message=FALSE, echo=FALSE}
+library(randomForest)
+rf.music = randomForest(as.factor(target) ~ ., data=data.train, mtry=3, ntree=500, importance=TRUE)
+rf.music
+plot(rf.music, main= "Random Forest Plot")
+
+yhat.rf = predict (rf.music, newdata = data.test)
+importance(rf.music)
+varImpPlot(rf.music)
+# Confusion matrix
+rf.err = table(pred = yhat.rf, truth = data.test$target)
+
+# Test error rate (Classification Error)
+test.rf.err = 1 - sum(diag(rf.err))/sum(rf.err)
+test.rf.err
+
+# Building the ROC Curve
+rf_pred2 <- as.data.frame(predict(rf.music, data.test, type = 'prob'))
+head(rf_pred2)
+# rf_roc_pred2 <- prediction(rf_pred2, data.test$target)
+# rf_perf2 <- performance(rf_roc_pred2, 
+#                         measure = "tpr", 
+#                         x.measure = "fpr")
+# 
+# # Plotting the curve
+# plot(rf_perf2, col = 2, lwd = 3, 
+#      main = "ROC Curve for randomForest with 3 variables")
+# abline(0,1)
+
+```
+# Conclusion
+
+# References
+
+# Appendix
+
